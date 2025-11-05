@@ -1,75 +1,104 @@
 defmodule Chord do
   use Application
 
-  @moduledoc """
-  Documentation for `Chord`.
-  """
-
   @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> Chord.hello()
-      :world
-
+  Number of bits in the identifier of a node
   """
-  def start(_type, _args) do
-    children = [
-      # Registry for virtual nodes
-      {Registry, name: Chord, keys: :unique},
-      {DynamicSupervisor, name: Chord.NodeSupervisor, strategy: :one_for_one}
-    ]
-
-    Supervisor.start_link(children, strategy: :one_for_one)
+  def n_bit_id do
+    32
   end
 
-  def create_node(id) do
-    DynamicSupervisor.start_child(Chord.NodeSupervisor, {Chord.Node, name: via(id)})
-  end
+  #   @moduledoc """
+  #   Documentation for `Chord`.
+  #   """
 
-  def lookup_node(id) do
-    GenServer.whereis(via(id))
-  end
+  #   @doc """
+  #   Hello world.
 
-  defp via(id) do
-    {:via, Registry, {Chord, id}}
-  end
+  #   ## Examples
+
+  #       #iex> Chord.hello()
+  #       #:world
+
+  #   """
+  #   def start(_type, _args) do
+  #     children = [
+  #       # Registry for virtual nodes
+  #       {Registry, name: Chord, keys: :unique},
+  #       {DynamicSupervisor, name: Chord.NodeSupervisor, strategy: :one_for_one}
+  #     ]
+
+  #     Supervisor.start_link(children, strategy: :one_for_one)
+  #   end
+
+  #   def create_node(id) do
+  #     DynamicSupervisor.start_child(Chord.NodeSupervisor, {Chord.Node, name: via(id)})
+  #   end
+
+  #   def lookup_node(id) do
+  #     GenServer.whereis(via(id))
+  #   end
+
+  #   defp via(id) do
+  #     {:via, Registry, {Chord, id}}
+  #   end
 end
 
 defmodule Chord.FingerTable do
-  use Agent
-  @timeout 5000
+  @type t :: %__MODULE__{
+          finger: [{integer, integer, pid()}],
+          predecessor: {integer, pid()},
+          this: {integer, pid()}
+        }
+  defstruct [:predecessor, :this, finger: []]
 
-  defp timeout() do
-    @timeout
+  @spec new(integer(), pid()) :: Chord.FingerTable.t()
+  def new(id, node) do
+    %__MODULE__{
+      predecessor: {id, node},
+      this: {id, node},
+      finger: Enum.map(0..(Chord.n_bit_id() - 1), fn i -> {i ** 2, id, node} end)
+    }
   end
 
-  def start_link(opts) do
-    Agent.start_link(fn -> [] end, opts)
-  end
-
-  def add(table, id, pid) do
+  @spec closest_preciding_finger(Chord.FingerTable.t(), integer()) :: {integer(), pid()}
+  def closest_preciding_finger(%Chord.FingerTable{finger: finger, this: {this_id, this_node}}, id) do
+    # To avoid a lot of modulos, shift values
+    id = rem(id - this_id, 2**Chord.n_bit_id())
+    Enum.reverse(finger) |> Enum.find(this_node, fn {i, _} -> i in id..i end)
   end
 end
 
 defmodule Chord.Node do
-  use Agent
-  @timeout 5000
+  use GenServer
 
+  @spec timeout :: non_neg_integer
   defp timeout() do
-    @timeout
+    5000
   end
 
-  def start_link(opts) do
-    Agent.start_link(fn -> %{} end, opts)
+  def start_link(id, opts \\ []) do
+    GenServer.start_link(__MODULE__, {id}, opts)
   end
 
-  def get(node, key) do
-    Agent.get(node, &Map.get(&1, key), timeout())
+  @impl true
+  def init({id}) do
+    {:ok, {%{}, Chord.FingerTable.new(id, self())}}
   end
 
-  def put(node, key, value) do
-    Agent.update(node, &Map.put(&1, key, value), timeout())
+  @impl true
+  def handle_call(:dump, _from, state) do
+    {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call({:join, node2}, _from, {map, finger}) do
+  end
+
+  def join(node1, node2) do
+  end
+
+  def dump(node) do
+    GenServer.call(node, :dump, timeout())
   end
 end
