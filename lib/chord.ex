@@ -1,4 +1,7 @@
 defmodule Chord do
+  #   @moduledoc """
+  #   Documentation for `Chord`.
+  #   """
   use Application
 
   @doc """
@@ -7,10 +10,6 @@ defmodule Chord do
   def n_bit_id do
     32
   end
-
-  #   @moduledoc """
-  #   Documentation for `Chord`.
-  #   """
 
   #   @doc """
   #   Hello world.
@@ -21,15 +20,17 @@ defmodule Chord do
   #       #:world
 
   #   """
-  #   def start(_type, _args) do
-  #     children = [
-  #       # Registry for virtual nodes
-  #       {Registry, name: Chord, keys: :unique},
-  #       {DynamicSupervisor, name: Chord.NodeSupervisor, strategy: :one_for_one}
-  #     ]
+  @impl true
+  def start(_type, _args) do
+    children = [
+      #       # Registry for virtual nodes
+      #       {Registry, name: Chord, keys: :unique},
+      #       {DynamicSupervisor, name: Chord.NodeSupervisor, strategy: :one_for_one}
+      {Task.Supervisor, name: Chord.TaskSupervisor}
+    ]
 
-  #     Supervisor.start_link(children, strategy: :one_for_one)
-  #   end
+    Supervisor.start_link(children, strategy: :one_for_one)
+  end
 
   #   def create_node(id) do
   #     DynamicSupervisor.start_child(Chord.NodeSupervisor, {Chord.Node, name: via(id)})
@@ -61,12 +62,18 @@ defmodule Chord.FingerTable do
     }
   end
 
-  @spec closest_preciding_finger(Chord.FingerTable.t(), integer()) :: {integer(), pid()}
-  def closest_preciding_finger(%Chord.FingerTable{finger: finger, this: {this_id, this_node}}, id) do
-    # To avoid a lot of modulos, shift values
-    id = rem(id - this_id, 2**Chord.n_bit_id())
-    Enum.reverse(finger) |> Enum.find(this_node, fn {i, _} -> i in id..i end)
+  @spec closest_preceding_finger(Chord.FingerTable.t(), integer()) :: {integer(), pid()}
+  def closest_preceding_finger(%Chord.FingerTable{finger: finger, this: {this_id, this_node}}, id) do
+    id = rem(id - this_id, 2 ** Chord.n_bit_id())
+
+    {_, finger_id, finger_node} =
+      Enum.reverse(finger) |> Enum.find({nil, this_id, this_node}, fn {_, i, _} -> i in id..i end)
+
+    {finger_id, finger_node}
   end
+
+  @spec successor(Chord.FingerTable.t()) :: {integer, pid()}
+  def successor(%Chord.FingerTable{finger: [{_, finger_id, finger_node} | _]}), do: {finger_id, finger_node}
 end
 
 defmodule Chord.Node do
@@ -92,10 +99,68 @@ defmodule Chord.Node do
   end
 
   @impl true
+  def handle_call({:closest_preceding_finger, id}, _from, state) do
+    {_, finger} = state
+    reply = Chord.FingerTable.closest_preceding_finger(finger, id)
+    {:reply, reply, state}
+  end
+
+  @impl true
+  def handle_call({:find_predecessor, id}, from, state) do
+    {_, finger} = state
+    %Chord.FingerTable{this: {this_id, _}} = finger
+    {next_id, node} = Chord.FingerTable.closest_preceding_finger(finger, id)
+    if next_id == this_id do
+      {:reply, {next_id, node}, state}
+    else
+      Task.Supervisor.start_child(Chord.TaskSupervisor, fn ->
+        GenServer.reply(from, Chord.Node.closest_preceding_finger(node, id))
+      end)
+      {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:find_successor, id}, from, state) do
+    Task.Supervisor.start_child(Chord.TaskSupervisor, fn ->
+      {_, pred} = find_predecessor(self(), id)
+
+      GenServer.reply(from, successor(pred))
+    end)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_call(:successor, _from, state) do
+    {_, finger} = state
+    {:reply, Chord.FingerTable.successor(finger), state}
+  end
+
+  @impl true
   def handle_call({:join, node2}, _from, {map, finger}) do
   end
 
   def join(node1, node2) do
+  end
+
+  @spec closest_preceding_finger(pid(), integer()) :: {integer(), pid()}
+  def closest_preceding_finger(node, id) do
+    GenServer.call(node, {:closest_preceding_finger, id}, timeout())
+  end
+
+  @spec find_predecessor(pid(), integer()) :: {integer(), pid()}
+  def find_predecessor(node, id) do
+    GenServer.call(node, {:find_predecessor, id})
+  end
+
+  @spec find_successor(pid(), integer()) :: {integer(), pid()}
+  def find_successor(node, id) do
+    GenServer.call(node, {:find_successor, id})
+  end
+
+  @spec successor(pid()) :: {integer(), pid()}
+  def successor(node) do
+    GenServer.call(node, :successor)
   end
 
   def dump(node) do
