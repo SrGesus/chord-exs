@@ -123,7 +123,14 @@ defmodule Chord.Node do
   @impl true
   def handle_call({:find_successor, id}, from, state) do
     Task.Supervisor.start_child(Chord.TaskSupervisor, fn ->
-      {_, pred} = find_predecessor(self(), id)
+      {_, finger} = state
+      %Chord.FingerTable{this: {this_id, _}} = finger
+      {next_id, node} = Chord.FingerTable.closest_preceding_finger(finger, id)
+      {_, pred} = if next_id == this_id do
+        {next_id, node}
+      else
+          Chord.Node.closest_preceding_finger(node, id)
+      end
 
       GenServer.reply(from, successor(pred))
     end)
