@@ -3,7 +3,7 @@ defmodule ChordNodeTest do
   doctest Chord.Node
 
   test "dump state" do
-    Chord.start(nil, nil)
+    Chord.start()
 
     id = 0
     {:ok, node} = Chord.Node.start_link(id)
@@ -13,9 +13,9 @@ defmodule ChordNodeTest do
 
     count = 10000
     tasks = 1..count
-    |> Enum.map(fn _c ->
+    |> Enum.map(fn i ->
       Task.async(fn ->
-        {^id, ^node} = Chord.Node.find_predecessor(node, 1)
+        {^id, ^node} = Chord.Node.closest_preceding_finger(node, i)
       end)
     end)
     start = Time.utc_now()
@@ -29,11 +29,27 @@ defmodule ChordNodeTest do
   end
 
   test "join nodes" do
+    Chord.start()
+
     {:ok, node1} = Chord.Node.start_link(0)
 
-    {:ok, node2} = Chord.Node.start_link(1)
+    {:ok, node2} = Chord.Node.start_link(2 ** 10)
 
-    Chord.Node.join(node1, node2)
+    {:ok, node3} = Chord.Node.start_link(2 ** 20)
+
+    Chord.Node.join(node2, node3)
+
+    # Chord.Node.join(node1, node2)
+
+    finger1 = Chord.Node.finger_table(node1)
+    finger2 = Chord.Node.finger_table(node2)
+    finger3 = Chord.Node.finger_table(node3)
+    assert [finger2, finger3] == [1,2]
+
+
+    # assert Enum.at(finger1.finger, 0) |> elem(1) == 2 ** 10
+    # assert Enum.at(finger2.finger, 14) |> elem(1) == 2 ** 20
+
 
   end
 end
