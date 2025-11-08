@@ -40,6 +40,7 @@ defmodule Chord.Node do
     Task.Supervisor.start_child(Chord.TaskSupervisor, fn ->
       GenServer.reply(from, Chord.FingerTable.find_predecessor_table(finger, id))
     end)
+
     {:noreply, state}
   end
 
@@ -48,6 +49,7 @@ defmodule Chord.Node do
     Task.Supervisor.start_child(Chord.TaskSupervisor, fn ->
       GenServer.reply(from, Chord.FingerTable.find_predecessor(finger, id))
     end)
+
     {:noreply, state}
   end
 
@@ -56,6 +58,7 @@ defmodule Chord.Node do
     Task.Supervisor.start_child(Chord.TaskSupervisor, fn ->
       GenServer.reply(from, Chord.FingerTable.find_successor(finger, id))
     end)
+
     {:noreply, state}
   end
 

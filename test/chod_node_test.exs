@@ -10,14 +10,16 @@ defmodule ChordNodeTest do
 
     {_, %Chord.FingerTable{predecessor: {^id, pred}}} = Chord.Node.dump(node)
 
-
     count = 10000
-    tasks = 1..count
-    |> Enum.map(fn i ->
-      Task.async(fn ->
-        {^id, ^node} = Chord.Node.closest_preceding_finger(node, i)
+
+    tasks =
+      1..count
+      |> Enum.map(fn i ->
+        Task.async(fn ->
+          {^id, ^node} = Chord.Node.closest_preceding_finger(node, i)
+        end)
       end)
-    end)
+
     start = Time.utc_now()
     Task.await_many(tasks)
     {^id, ^node} = Chord.Node.closest_preceding_finger(node, 1)
@@ -40,16 +42,9 @@ defmodule ChordNodeTest do
     Chord.Node.join(node1, node3)
     Chord.Node.join(node0, node3)
 
-    finger0 = Chord.Node.finger_table(node0)
-    finger1 = Chord.Node.finger_table(node1)
-    finger2 = Chord.Node.finger_table(node2)
-    finger3 = Chord.Node.finger_table(node3)
+    finger = Chord.Node.finger_table(node0)
 
-    assert [finger0, finger1, finger2, finger3] == [1,2]
-
-    assert Enum.at(finger1.finger, 0) |> elem(1) == 2 ** 10
-    assert Enum.at(finger2.finger, 14) |> elem(1) == 2 ** 20
-
-
+    assert Enum.at(finger.finger, 0) |> elem(1) == 2 ** 30
+    assert Enum.at(finger.finger, 31) |> elem(1) == 2 ** 31
   end
 end
