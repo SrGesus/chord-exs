@@ -31,24 +31,24 @@ defmodule ChordNodeTest do
   test "join nodes" do
     Chord.start()
 
-    {:ok, node1} = Chord.Node.start_link(0)
-
-    {:ok, node2} = Chord.Node.start_link(2 ** 10)
-
-    {:ok, node3} = Chord.Node.start_link(2 ** 20)
+    {:ok, node0} = Chord.Node.start_link(0)
+    {:ok, node1} = Chord.Node.start_link(div(2 ** 32, 4) * 1)
+    {:ok, node2} = Chord.Node.start_link(div(2 ** 32, 4) * 2)
+    {:ok, node3} = Chord.Node.start_link(div(2 ** 32, 4) * 3)
 
     Chord.Node.join(node2, node3)
+    Chord.Node.join(node1, node3)
+    Chord.Node.join(node0, node3)
 
-    # Chord.Node.join(node1, node2)
-
+    finger0 = Chord.Node.finger_table(node0)
     finger1 = Chord.Node.finger_table(node1)
     finger2 = Chord.Node.finger_table(node2)
     finger3 = Chord.Node.finger_table(node3)
-    assert [finger2, finger3] == [1,2]
 
+    assert [finger0, finger1, finger2, finger3] == [1,2]
 
-    # assert Enum.at(finger1.finger, 0) |> elem(1) == 2 ** 10
-    # assert Enum.at(finger2.finger, 14) |> elem(1) == 2 ** 20
+    assert Enum.at(finger1.finger, 0) |> elem(1) == 2 ** 10
+    assert Enum.at(finger2.finger, 14) |> elem(1) == 2 ** 20
 
 
   end

@@ -78,6 +78,11 @@ defmodule Chord.Node do
     {:reply, Chord.FingerTable.successor(finger), state}
   end
 
+  @impl true
+  def handle_call({:set_predecessor, p}, _from, {map, finger}) do
+    {:reply, :ok, {map, Chord.FingerTable.set_predecessor(finger, p)}}
+  end
+
   def join(node1, node2) do
     GenServer.call(node1, {:join, node2}, timeout())
   end
@@ -105,6 +110,11 @@ defmodule Chord.Node do
   @spec successor(pid()) :: {integer(), pid()}
   def successor(node) do
     GenServer.call(node, :successor)
+  end
+
+  @spec set_predecessor(pid(), {integer(), pid()}) :: nil
+  def set_predecessor(node, p) do
+    GenServer.call(node, {:set_predecessor, p})
   end
 
   def dump(node) do

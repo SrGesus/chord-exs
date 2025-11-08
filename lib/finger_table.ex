@@ -24,9 +24,6 @@ defmodule Chord.FingerTable do
   @spec closest_preceding_finger(Chord.FingerTable.t(), integer()) :: {integer(), pid()}
   def closest_preceding_finger(%Chord.FingerTable{this: {this_id, this_node}} = table, id) do
     case Integer.mod(id - this_id, max_id()) do
-      # id when id in 0..1 ->
-      #   table.this
-
       0 ->
         table.predecessor
 
@@ -90,6 +87,8 @@ defmodule Chord.FingerTable do
 
     suc = hd(pred_table.finger)
 
+    Chord.Node.set_predecessor(elem(suc, 2), table.this)
+
     %Chord.FingerTable{
       table
       | finger: [suc | init_finger_table_(suc, finger, pred_table, this_id)],
@@ -139,7 +138,10 @@ defmodule Chord.FingerTable do
 
     IO.puts("Received in #{this_id}")
 
-    if Integer.mod(id - this_id, max_id()) in 0..Integer.mod(finger_node_id - this_id - 1, max_id()) do
+    if Integer.mod(id - this_id, max_id()) in 1..Integer.mod(
+         finger_node_id - this_id - 1,
+         max_id()
+       ) do
       Task.Supervisor.start_child(Chord.TaskSupervisor, fn ->
         Chord.Node.update_finger_table(elem(table.predecessor, 1), {id, node}, i)
       end)
@@ -158,8 +160,23 @@ defmodule Chord.FingerTable do
     for i <- 0..(Chord.n_bit_id() - 1) do
       {_pred_id, pred} = find_predecessor(table, Integer.mod(this_id - 2 ** i, max_id()))
       # if pred_id != this_id do
-        Chord.Node.update_finger_table(pred, table.this, i)
+      Chord.Node.update_finger_table(pred, table.this, i)
       # end
+    end
+  end
+
+  @spec set_predecessor(Chord.FingerTable.t(), {integer(), pid()}) :: t()
+  def set_predecessor(
+        %Chord.FingerTable{predecessor: {old_id, _}, this: {this_id, _}} = table,
+        {pred_id, _} = pred
+      ) do
+    if Integer.mod(old_id - this_id, max_id()) > Integer.mod(pred_id - this_id, max_id()) do
+      table
+    else
+      %Chord.FingerTable{
+        table
+        | predecessor: pred
+      }
     end
   end
 end
